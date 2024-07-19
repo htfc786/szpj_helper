@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>素质评价助手</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://unpkg.com/element-plus"></script>
+</head>
+<body>
+  <div id="app">
+    <el-container>
+      <el-header>
+        <h3 class="title">欢迎使用素质评价助手</h3>
+      </el-header>
+      <el-main>
+        <span>
+          提示：使用前，建议您查看
+          <a href="https://github.com/htfc786/szpj_helper/tree/main/README.md#素质评价助手使用帮助" target="_blank">项目文档使用说明</a>
+        </span>
+        <div class="student-info">
+          <h4 style="margin-bottom: 1px;">学生信息：</h4>
+          <el-input v-model.lazy="stuJson" :rows="2" type="textarea" placeholder="请粘贴复制的学生信息表字符串"></el-input>
+          姓名Key：<el-input v-model.lazy="stuKey" placeholder="Key（默认为xm或XM）" style="width: 200px;"></el-input>
+          <p style="margin: 0;">学生列表：
+            <el-button type="primary" @click="loadStuInfo">读取缓存信息</el-button>
+            <el-button type="danger" @click="clearStuInfo">清空缓存信息</el-button>
+          </p>
+          <p style="margin: 0;">{{ stuList }}</p>
+        </div>
+        <div class="compare">
+          <h4 style="margin-bottom: 1px;">对比信息：</h4>
+          对比选项：<el-radio-group v-model.lazy="compareOption" size="small">
+            <el-radio-button label="阳光体育出勤" value="阳光体育出勤" ></el-radio-button>
+            <el-radio-button label="心理素质展示" value="心理素质展示" ></el-radio-button>
+            <el-radio-button label="自述报告" value="自述报告" ></el-radio-button>
+          </el-radio-group>
+          <el-input v-model.lazy="compareJson" :rows="2" type="textarea" placeholder="请粘贴复制的信息表字符串"></el-input>
+          姓名Key：<el-input v-model.lazy="compareKey" placeholder="Key（默认为xm或XM）" style="width: 200px;"></el-input>
+          <p style="margin: 0;">已填列表：</p>
+          <p style="margin: 0;">{{ compareList }}</p>
+        </div>
+        <div class="result">
+            <h4 style="margin-bottom: 1px;">结果：</h4>
+            <el-button type="primary" @click="copyResult">复制结果</el-button>
+            <p v-html="resultHtml"></p>
+        </div>
+      </el-main>
+      <el-footer>
+        <span>
+          <a href="https://github.com/htfc786/szpj_helper" target="_blank">代码开源</a>
+          素质评价助手 by htfc786
+        </span>
+      </el-footer>  
+    </el-container>
+  </div>
+  <script>
+    STU_LIST_KEY = 'stu_list'
+    Vue.createApp({
+      data() {
+        return {
+          stuJson: '',
+          stuKey: 'xm',
+          stuList: [],
+          compareOption: '阳光体育出勤',
+          compareJson: '',
+          compareKey: 'xm',
+          compareList: [],
+          result: '',
+          resultHtml: "",
+        }
+      },
+      watch: {
+        stuJson: function () { this.stuInfo() },
+        stuKey: function () { this.stuInfo() },
+        compareJson: function () { this.compareInfo() },
+        compareKey: function () { this.compareInfo() },
+        compareOption: function (newVal) { 
+          if (newVal === '心理素质展示') {
+            this.compareKey = 'XM'
+          } else {
+            this.compareKey = 'xm'
+          }
+        },
+        stuList: function () { this.compare() },
+        compareList: function () { this.compare() },
+        result: function () { this.resultHtml = this.result.replace(/\n/g, '<br>') }
+      },
+      mounted() {
+        this.loadStuInfo()
+      },
+      methods: {
+        saveStuInfo() {
+          localStorage.setItem(STU_LIST_KEY, JSON.stringify({ "stuList": this.stuList }))
+          this.$message.success("学生列表保存成功！")
+        },
+        loadStuInfo() {
+          const stuList_str = localStorage.getItem(STU_LIST_KEY)
+          if (!stuList_str) {
+            return;
+          }
+          stuList = JSON.parse(stuList_str)["stuList"]
+          if (!stuList.length || stuList[0] === null) {
+            localStorage.removeItem(STU_LIST_KEY)
+            return;
+          }
+          this.stuList = stuList
+          this.$message.success("学生列表读取成功！")
+        },
+        clearStuInfo() { 
+          this.$confirm('此操作将删除缓存的学生列表, 是否继续?', '提示', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }).then(() => {
+            localStorage.removeItem(STU_LIST_KEY) 
+            this.stuList = []
+            this.$message.success("学生列表删除成功！")
+          })
+        },
+        stuInfo() {
+          this.getStudentList(this.stuJson, this.stuKey, (list) => {
+            this.stuList = list
+            this.saveStuInfo()
+          })
+        },
+        compareInfo() {
+          this.getStudentList(this.compareJson, this.compareKey, (list) => {
+            this.compareList = list
+          })
+        },
+        //解析json数据转换为列表
+        getStudentList(jsonStr, key, func) {
+          try {
+            const stuData = JSON.parse(jsonStr)
+            const stuInfo = stuData["rows"]
+            const stuList = []
+            for (const student of stuInfo) {
+              if (!stuList.includes(student[key])) {
+                stuList.push(student[key])
+              }
+            }
+            if (!stuList.length || stuList[0] == null) {
+              this.$message.error("姓名的Key错误！json解析失败！")
+              return;
+            }
+            func && func(stuList);
+          } catch (e) {
+            this.$message.error("json解析失败！")
+          }
+        },
+        compare() {
+          if ( !this.stuList.length || !this.compareList.length || !this.compareJson) {//空内容
+            return;
+          }
+          res_arr = []
+          for (const stu of this.stuList) {
+            if (!this.compareList.includes(stu)) {
+              res_arr.push(stu)
+            }
+          }
+          if (res_arr.length == 0) {
+            this.result = `全部同学的${this.compareOption}项均填写完成！`
+          } else {
+            this.result = `${res_arr.join(' ')} ${res_arr.length}位同学未填写${this.compareOption}`
+          }
+          // 阳光体育出勤 的 全勤 比对 ygtycq_cq
+          if (this.compareOption === '阳光体育出勤') {
+            try {
+              const stuData = JSON.parse(this.compareJson)["rows"]
+              const cqList = []
+              for (const student of stuData) {
+                if (student["ygtycq_cq"] !== "全勤") {
+                  cqList.push(student["xm"])
+                }
+              }
+              if (cqList.length > 0) {
+                this.result += `\n${cqList.join(' ')} ${cqList.length}位同学阳光体育出勤填写内容不是"全勤"！`
+              }
+            } catch (e) {}
+          }
+        },
+        copyResult() { 
+          navigator.clipboard.writeText(this.result)
+            .then(() => { this.$message.success("结果已复制到剪贴板！") })
+            .catch((err) => { this.$message.error("复制失败！") })
+        }
+      }
+    }).use(ElementPlus).mount('#app')
+  </script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    .el-container {
+      height: 100vh;
+    }
+    .title {
+      margin-left: 8px;
+      font-size: 20px;
+      color: #000;
+    }
+    .el-header{
+      border-bottom: 1px solid #f0f0f0;
+      background-color: #F5F7FA;;
+    }
+    .el-header>.el-row {
+      align-items: center;
+      height: 100%;
+    }
+    .el-footer {
+      --el-footer-height: 30px;
+      background-color: #E9EEF3;
+      color: #333;
+      text-align: center;
+      line-height: 30px;
+    }
+    a {
+      color: #1890ff;
+      text-decoration: none;
+      outline: none;
+      cursor: pointer;
+    }
+  </style>
+</body>
+</html>
